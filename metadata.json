@@ -1,0 +1,6 @@
+{
+  "name": "نظام البطاقات الذكية - مجمع سيد الشهداء الخدمي",
+  "description": "منظومة البطاقات الذكية والتعريفية لمسؤولي قسم مجمع سيد الشهداء عليه السلام الخدمي في العتبة الحسينية المقدسة مع باركود استعراض فوري",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
