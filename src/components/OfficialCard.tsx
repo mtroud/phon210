@@ -19,18 +19,22 @@ import {
 
 interface OfficialCardProps {
   official: Official;
+  isAdmin?: boolean;
   onOpenMobileView: (official: Official) => void;
   onOpenPrintModal: (official: Official) => void;
   onEdit: (official: Official) => void;
-  onDelete: (id: string) => void;
+  onDelete: (official: Official) => void;
+  onRequireAdmin?: () => void;
 }
 
 export const OfficialCard: React.FC<OfficialCardProps> = ({
   official,
+  isAdmin = true,
   onOpenMobileView,
   onOpenPrintModal,
   onEdit,
   onDelete,
+  onRequireAdmin,
 }) => {
   const [miniQrUrl, setMiniQrUrl] = useState<string>('');
 
@@ -199,21 +203,29 @@ export const OfficialCard: React.FC<OfficialCardProps> = ({
           </button>
 
           <button
-            onClick={() => onEdit(official)}
+            onClick={() => {
+              if (!isAdmin && onRequireAdmin) {
+                onRequireAdmin();
+              } else {
+                onEdit(official);
+              }
+            }}
             className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-amber-300 transition"
-            title="تعديل بيانات المسؤول"
+            title={isAdmin ? 'تعديل بيانات المسؤول' : 'يلزم تسجيل دخول الإدارة للتعديل'}
           >
             <Edit3 className="w-3.5 h-3.5" />
           </button>
 
           <button
             onClick={() => {
-              if (confirm(`هل أنت متأكد من حذف المسؤول (${official.fullName})؟`)) {
-                onDelete(official.id);
+              if (!isAdmin && onRequireAdmin) {
+                onRequireAdmin();
+              } else {
+                onDelete(official);
               }
             }}
             className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition"
-            title="حذف المسؤول"
+            title={isAdmin ? 'حذف المسؤول' : 'يلزم تسجيل دخول الإدارة للحذف'}
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>

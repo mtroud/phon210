@@ -30,7 +30,7 @@ export const PrintBadgeModal: React.FC<PrintBadgeModalProps> = ({
   if (!isOpen) return null;
 
   const [template, setTemplate] = useState<CardTemplate>('vertical_badge');
-  const [side, setSide] = useState<'both' | 'front' | 'back'>('both');
+  const [side, setSide] = useState<'both' | 'front' | 'back'>('front');
   const [qrMode, setQrMode] = useState<QrTargetMode>('direct_vcard');
 
   const handlePrint = () => {
@@ -104,6 +104,14 @@ export const PrintBadgeModal: React.FC<PrintBadgeModalProps> = ({
             <span className="text-slate-400 font-semibold">أوجه العرض:</span>
             <div className="flex rounded-xl bg-slate-900 p-1 border border-slate-800">
               <button
+                onClick={() => setSide('front')}
+                className={`px-2.5 py-1 rounded-lg transition ${
+                  side === 'front' ? 'bg-emerald-600 text-white font-bold' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                البطاقة الموحدة (الاسم والمعلومات والباركود)
+              </button>
+              <button
                 onClick={() => setSide('both')}
                 className={`px-2.5 py-1 rounded-lg transition ${
                   side === 'both' ? 'bg-emerald-600 text-white font-bold' : 'text-slate-400 hover:text-white'
@@ -112,20 +120,12 @@ export const PrintBadgeModal: React.FC<PrintBadgeModalProps> = ({
                 الوجه والظهر
               </button>
               <button
-                onClick={() => setSide('front')}
-                className={`px-2.5 py-1 rounded-lg transition ${
-                  side === 'front' ? 'bg-emerald-600 text-white font-bold' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                الوجه فقط
-              </button>
-              <button
                 onClick={() => setSide('back')}
                 className={`px-2.5 py-1 rounded-lg transition ${
                   side === 'back' ? 'bg-emerald-600 text-white font-bold' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                الظهر (الباركود)
+                الظهر فقط
               </button>
             </div>
           </div>

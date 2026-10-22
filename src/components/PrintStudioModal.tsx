@@ -46,7 +46,7 @@ export const PrintStudioModal: React.FC<PrintStudioModalProps> = ({
   // Design & Print Configurations
   const [template, setTemplate] = useState<CardTemplate>(initialTemplate);
   const [theme, setTheme] = useState<CardTheme>('royal_emerald');
-  const [side, setSide] = useState<'both' | 'front' | 'back'>('both');
+  const [side, setSide] = useState<'both' | 'front' | 'back'>('front');
   const [qrMode, setQrMode] = useState<QrTargetMode>(defaultQrMode);
   const [paperType, setPaperType] = useState<PaperType>('a4_sheet');
   const [showCropMarks, setShowCropMarks] = useState<boolean>(true);
@@ -201,28 +201,28 @@ export const PrintStudioModal: React.FC<PrintStudioModalProps> = ({
                 <span className="text-slate-400 font-bold">أوجه الطباعة:</span>
                 <div className="flex rounded-xl bg-slate-900 p-1 border border-slate-800">
                   <button
+                    onClick={() => setSide('front')}
+                    className={`px-2.5 py-1 rounded-lg transition ${
+                      side === 'front' ? 'bg-emerald-600 text-white font-bold' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    البطاقة الموحدة (الاسم + المعلومات + الباركود)
+                  </button>
+                  <button
                     onClick={() => setSide('both')}
-                    className={`px-2 py-1 rounded-lg transition ${
+                    className={`px-2.5 py-1 rounded-lg transition ${
                       side === 'both' ? 'bg-emerald-600 text-white font-bold' : 'text-slate-400 hover:text-white'
                     }`}
                   >
                     الوجه والظهر معاً
                   </button>
                   <button
-                    onClick={() => setSide('front')}
-                    className={`px-2 py-1 rounded-lg transition ${
-                      side === 'front' ? 'bg-emerald-600 text-white font-bold' : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    الوجه فقط
-                  </button>
-                  <button
                     onClick={() => setSide('back')}
-                    className={`px-2 py-1 rounded-lg transition ${
+                    className={`px-2.5 py-1 rounded-lg transition ${
                       side === 'back' ? 'bg-emerald-600 text-white font-bold' : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    الظهر (الباركود)
+                    الظهر فقط
                   </button>
                 </div>
               </div>

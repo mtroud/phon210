@@ -46,3 +46,36 @@ export type PrintBatchMode = 'vertical_badges' | 'horizontal_cards' | 'quick_dir
 export type CardTheme = 'royal_emerald' | 'print_white' | 'obsidian_gold';
 export type PaperType = 'a4_sheet' | 'pvc_card' | 'qr_stickers';
 export type DuplexLayout = 'side_by_side' | 'faces_first' | 'backs_first';
+
+export type SortOption = 
+  | 'name_asc' 
+  | 'name_desc' 
+  | 'badge_asc' 
+  | 'badge_desc' 
+  | 'division' 
+  | 'date_desc';
+
+export interface AuditLog {
+  id: string;
+  timestamp: string;
+  action: 'add' | 'edit' | 'delete' | 'reset' | 'import' | 'export_backup' | 'export_csv';
+  officialId?: string;
+  officialName?: string;
+  details?: string;
+  performedBy: string;
+}
+
+export interface AdminSecurityConfig {
+  pinHash: string; // Stored PIN hash
+  autoLockMinutes: number; // e.g. 15 minutes
+  requirePinForSensitiveActions: boolean;
+}
+
+export interface ToastNotification {
+  id: string;
+  type: 'success' | 'error' | 'info' | 'warning';
+  title: string;
+  message?: string;
+  duration?: number;
+}
+

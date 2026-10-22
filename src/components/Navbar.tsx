@@ -5,29 +5,47 @@ import {
   Printer, 
   QrCode, 
   Download, 
+  Upload,
   RefreshCw, 
-  Smartphone,
   ShieldCheck,
+  ShieldAlert,
+  FileSpreadsheet,
+  FileText,
+  Lock,
+  Unlock,
   Layers,
-  Sparkles
+  Sparkles,
+  ClipboardList
 } from 'lucide-react';
 import { CardTemplate } from '../types';
 
 interface NavbarProps {
+  isAdmin: boolean;
+  onToggleAdminLogin: () => void;
   onAddNew: () => void;
   onOpenBatchPrint: () => void;
   onOpenPrintStudio: (template?: CardTemplate) => void;
   onOpenScanner: () => void;
+  onOpenReport: () => void;
+  onOpenImport: () => void;
   onExportBackup: () => void;
+  onExportCsv: () => void;
+  onOpenAuditLogs: () => void;
   onResetData: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
+  isAdmin,
+  onToggleAdminLogin,
   onAddNew,
   onOpenBatchPrint,
   onOpenPrintStudio,
   onOpenScanner,
+  onOpenReport,
+  onOpenImport,
   onExportBackup,
+  onExportCsv,
+  onOpenAuditLogs,
   onResetData,
 }) => {
   return (
@@ -42,10 +60,29 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <h1 className="text-sm sm:text-base font-extrabold text-amber-400 font-amiri tracking-wide">
                   العتبة الحسينية المقدسة
                 </h1>
-                <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  منظومة معتمدة
-                </span>
+                
+                {/* Admin / Viewer Security Status Badge */}
+                <button
+                  onClick={onToggleAdminLogin}
+                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border transition ${
+                    isAdmin
+                      ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25'
+                      : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-amber-300'
+                  }`}
+                  title={isAdmin ? 'وضع الإدارة مفعل - انقر لقفل الجلسة' : 'وضع المشاهدة - انقر لإدخال رمز الإدارة'}
+                >
+                  {isAdmin ? (
+                    <>
+                      <Unlock className="w-3 h-3 text-emerald-400" />
+                      <span>إدارة مفعّلة</span>
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-3 h-3 text-slate-400" />
+                      <span>وضع المشاهدة</span>
+                    </>
+                  )}
+                </button>
               </div>
               <h2 className="text-xs sm:text-sm font-bold text-white font-tajawal">
                 قسم مجمع سيد الشهداء (عليه السلام) الخدمي
@@ -65,8 +102,19 @@ export const Navbar: React.FC<NavbarProps> = ({
               title="طباعة واستعراض الباركودات المربعة الحديثة فقط"
             >
               <QrCode className="w-4 h-4 text-amber-400" />
-              <span className="hidden md:inline">الباركود</span>
+              <span className="hidden lg:inline">الباركود</span>
               <span>الحديث</span>
+            </button>
+
+            {/* Official Administrative Report Button */}
+            <button
+              onClick={onOpenReport}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-bold shadow-sm transition"
+              title="عرض وطباعة التقرير الإداري الرسمي (A4)"
+            >
+              <FileText className="w-4 h-4 text-amber-400" />
+              <span className="hidden md:inline">التقرير</span>
+              <span>الإداري</span>
             </button>
 
             {/* Professional Print Studio Button */}
@@ -89,15 +137,16 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span>إضافة مسؤول</span>
             </button>
 
-            {/* Quick Tools & Database Backup */}
+            {/* Administrative Management Tools Menu */}
             <div className="relative group">
               <button
-                className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-700/80 transition"
-                title="أدوات ومحاكي المسح والنسخ الاحتياطي"
+                className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/80 transition"
+                title="أدوات إدارة النظام والنسخ الاحتياطي"
               >
                 <Download className="w-4 h-4" />
               </button>
-              <div className="absolute left-0 mt-2 w-52 rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl p-1.5 hidden group-hover:block transition z-50 text-xs font-medium">
+
+              <div className="absolute left-0 mt-2 w-60 rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl p-1.5 hidden group-hover:block transition z-50 text-xs font-medium">
                 <button
                   onClick={onOpenScanner}
                   className="w-full text-right px-3 py-2 rounded-xl hover:bg-slate-800 text-slate-200 flex items-center justify-between"
@@ -105,19 +154,43 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <span>محاكي فحص الباركود</span>
                   <QrCode className="w-3.5 h-3.5 text-emerald-400" />
                 </button>
+
+                <button
+                  onClick={onExportCsv}
+                  className="w-full text-right px-3 py-2 rounded-xl hover:bg-slate-800 text-slate-200 flex items-center justify-between"
+                >
+                  <span>تصدير كشف إكسل (CSV)</span>
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                </button>
+
                 <button
                   onClick={onExportBackup}
                   className="w-full text-right px-3 py-2 rounded-xl hover:bg-slate-800 text-slate-200 flex items-center justify-between"
                 >
-                  <span>تصدير نسخة احتياطية</span>
+                  <span>تصدير نسخة احتياطية (JSON)</span>
                   <Download className="w-3.5 h-3.5 text-amber-400" />
                 </button>
+
                 <button
-                  onClick={() => {
-                    if (confirm('هل تريد إعادة تحميل البيانات الافتراضية المعتمدة للمجمع؟')) {
-                      onResetData();
-                    }
-                  }}
+                  onClick={onOpenImport}
+                  className="w-full text-right px-3 py-2 rounded-xl hover:bg-slate-800 text-slate-200 flex items-center justify-between"
+                >
+                  <span>استيراد نسخة احتياطية</span>
+                  <Upload className="w-3.5 h-3.5 text-blue-400" />
+                </button>
+
+                <button
+                  onClick={onOpenAuditLogs}
+                  className="w-full text-right px-3 py-2 rounded-xl hover:bg-slate-800 text-slate-200 flex items-center justify-between"
+                >
+                  <span>سجل النشاط والعمليات (Audit)</span>
+                  <ClipboardList className="w-3.5 h-3.5 text-purple-400" />
+                </button>
+
+                <div className="h-px bg-slate-800 my-1" />
+
+                <button
+                  onClick={onResetData}
                   className="w-full text-right px-3 py-2 rounded-xl hover:bg-rose-500/10 text-rose-300 flex items-center justify-between"
                 >
                   <span>استعادة بيانات المجمع الأصلية</span>

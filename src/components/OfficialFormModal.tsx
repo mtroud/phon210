@@ -19,6 +19,7 @@ import {
 
 interface OfficialFormModalProps {
   initialOfficial?: Official | null;
+  existingOfficials?: Official[];
   isOpen: boolean;
   onClose: () => void;
   onSave: (official: Official) => void;
@@ -46,6 +47,7 @@ const SAMPLE_AVATARS = [
 
 export const OfficialFormModal: React.FC<OfficialFormModalProps> = ({
   initialOfficial,
+  existingOfficials = [],
   isOpen,
   onClose,
   onSave,
@@ -67,6 +69,7 @@ export const OfficialFormModal: React.FC<OfficialFormModalProps> = ({
   const [shift, setShift] = useState(initialOfficial?.shift || 'صباحي (07:00 - 15:00)');
   const [bloodType, setBloodType] = useState(initialOfficial?.bloodType || 'O+');
   const [notes, setNotes] = useState(initialOfficial?.notes || '');
+  const [formError, setFormError] = useState('');
 
   // Multiple Mobile Phones state
   const [mobilePhones, setMobilePhones] = useState<PhoneNumber[]>(
@@ -144,19 +147,45 @@ export const OfficialFormModal: React.FC<OfficialFormModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName.trim()) return;
+    setFormError('');
+
+    if (!fullName.trim()) {
+      setFormError('يرجى إدخال اسم المسؤول الكامل');
+      return;
+    }
+
+    const trimmedBadge = badgeNumber.trim();
+    if (!trimmedBadge) {
+      setFormError('يرجى تحديد رقم الباجة');
+      return;
+    }
+
+    // Check duplicate badge number
+    const isDuplicate = existingOfficials.some(
+      (o) => o.id !== initialOfficial?.id && o.badgeNumber.toLowerCase().trim() === trimmedBadge.toLowerCase()
+    );
+    if (isDuplicate) {
+      setFormError(`رقم الباجة (${trimmedBadge}) مستخدم مسبقاً لمسؤول آخر. يرجى اختيار رقم باجة مختلف.`);
+      return;
+    }
+
+    const validMobiles = mobilePhones.filter((m) => m.number.trim().length > 0);
+    if (validMobiles.length === 0) {
+      setFormError('يرجى إدخال رقم هاتف محمول واحد على الأقل للمسؤول');
+      return;
+    }
 
     const finalDivision = division === 'custom' ? customDivision.trim() || 'شعبة أخرى' : division;
 
     const officialToSave: Official = {
       id: initialOfficial?.id || `OFF-${Date.now()}`,
-      badgeNumber: badgeNumber.trim() || 'SSH-000',
+      badgeNumber: trimmedBadge,
       fullName: fullName.trim(),
       title: title.trim() || 'مسؤول في مجمع سيد الشهداء الخدمي',
       department: 'قسم مجمع سيد الشهداء عليه السلام الخدمي',
       division: finalDivision,
       subUnit: subUnit.trim(),
-      mobilePhones: mobilePhones.filter((m) => m.number.trim().length > 0),
+      mobilePhones: validMobiles,
       internalExtensions: internalExtensions.filter((e) => e.number.trim().length > 0),
       email: email.trim(),
       radioDevice: radioDevice.trim(),
@@ -570,6 +599,13 @@ export const OfficialFormModal: React.FC<OfficialFormModalProps> = ({
               className="w-full text-xs px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 focus:outline-none resize-none"
             />
           </div>
+
+          {formError && (
+            <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+              <span className="font-bold">تنبيه:</span>
+              <span>{formError}</span>
+            </div>
+          )}
 
           {/* Form Actions */}
           <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-2.5">

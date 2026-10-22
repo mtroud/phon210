@@ -1,6 +1,22 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Official, ViewMode, QrTargetMode, PrintBatchMode, CardTemplate } from './types';
-import { loadOfficials, saveOfficials, resetOfficialsToDefault, exportOfficialsJson } from './utils/storage';
+import { 
+  Official, 
+  ViewMode, 
+  QrTargetMode, 
+  PrintBatchMode, 
+  CardTemplate,
+  SortOption,
+  ToastNotification 
+} from './types';
+import { 
+  loadOfficials, 
+  saveOfficials, 
+  resetOfficialsToDefault, 
+  exportOfficialsJson,
+  exportOfficialsCsv,
+  addAuditLog 
+} from './utils/storage';
+import { getSessionState, clearAdminSession } from './utils/security';
 import { Navbar } from './components/Navbar';
 import { OfficialCard } from './components/OfficialCard';
 import { SmartMobileView } from './components/SmartMobileView';
@@ -10,6 +26,12 @@ import { BatchPrintModal } from './components/BatchPrintModal';
 import { PrintStudioModal } from './components/PrintStudioModal';
 import { QrScannerModal } from './components/QrScannerModal';
 import { UrlSettingsModal } from './components/UrlSettingsModal';
+import { OfficialReportModal } from './components/OfficialReportModal';
+import { ImportBackupModal } from './components/ImportBackupModal';
+import { AuditLogModal } from './components/AuditLogModal';
+import { AdminLoginModal } from './components/AdminLoginModal';
+import { ConfirmModal } from './components/ConfirmModal';
+import { ToastContainer } from './components/Toast';
 import { Emblem } from './components/Emblem';
 import { 
   Search, 
@@ -24,22 +46,37 @@ import {
   LayoutGrid,
   List,
   CheckCircle,
-  HelpCircle,
-  ArrowRight,
-  Globe
+  ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
+  Globe,
+  FileSpreadsheet,
+  FileText,
+  Lock,
+  Unlock,
+  ShieldAlert
 } from 'lucide-react';
 
 export default function App() {
   const [officials, setOfficials] = useState<Official[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
+  // Security & Admin Mode
+  const [isAdmin, setIsAdmin] = useState<boolean>(true);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+
   // Standalone Smart Mobile Card view state (when scanned via QR code or requested)
   const [activeMobileOfficial, setActiveMobileOfficial] = useState<Official | null>(null);
 
-  // Active filters and search
+  // Active filters, search & sorting
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDivision, setSelectedDivision] = useState<string>('all');
+  const [sortOption, setSortOption] = useState<SortOption>('badge_asc');
   const [layoutMode, setLayoutMode] = useState<'grid' | 'table'>('grid');
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(12); // 12 officials per page
 
   // Modals state
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -51,8 +88,51 @@ export default function App() {
   const [printStudioTemplate, setPrintStudioTemplate] = useState<CardTemplate>('minimal_qr');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isUrlSettingsOpen, setIsUrlSettingsOpen] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const [systemQrMode, setSystemQrMode] = useState<QrTargetMode>('direct_vcard');
   const [urlConfigVersion, setUrlConfigVersion] = useState(0);
+
+  // Confirm Dialog State
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    variant: 'danger' | 'warning' | 'info';
+    action: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    variant: 'danger',
+    action: () => {},
+  });
+
+  // Toasts Notifications
+  const [toasts, setToasts] = useState<ToastNotification[]>([]);
+
+  const addToast = (type: ToastNotification['type'], title: string, message?: string) => {
+    const newToast: ToastNotification = {
+      id: `toast-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      type,
+      title,
+      message,
+    };
+    setToasts((prev) => [...prev, newToast]);
+  };
+
+  const removeToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  // Check admin session on start
+  useEffect(() => {
+    const session = getSessionState();
+    if (session.isAdmin) {
+      setIsAdmin(true);
+    }
+  }, []);
 
   // Load officials on start & check query parameters
   useEffect(() => {
@@ -78,7 +158,7 @@ export default function App() {
             label: parts[0] || 'محمول',
             number: parts[1] || parts[0],
             isPrimary: idx === 0,
-            hasWhatsapp: true
+            hasWhatsapp: true,
           };
         });
 
@@ -87,7 +167,7 @@ export default function App() {
           return {
             id: String(idx),
             label: parts[0] || 'بدالة',
-            number: parts[1] || parts[0]
+            number: parts[1] || parts[0],
           };
         });
 
@@ -105,13 +185,18 @@ export default function App() {
           avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=400',
           active: true,
           createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
+          updatedAt: new Date().toISOString(),
         };
 
         setActiveMobileOfficial(reconstructed);
       }
     }
   }, []);
+
+  // Reset to page 1 whenever search query or division filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedDivision, sortOption, pageSize]);
 
   // Update URL parameter when opening mobile preview
   const handleOpenMobilePreview = (official: Official) => {
@@ -125,28 +210,110 @@ export default function App() {
     window.history.pushState({}, '', window.location.pathname);
   };
 
-  // CRUD Operations
+  // CRUD Operations with Audit Logging & Toasts
   const handleSaveOfficial = (officialToSave: Official) => {
     let updated: Official[];
     const exists = officials.some((o) => o.id === officialToSave.id);
     if (exists) {
       updated = officials.map((o) => (o.id === officialToSave.id ? officialToSave : o));
+      addAuditLog({
+        action: 'edit',
+        officialId: officialToSave.id,
+        officialName: officialToSave.fullName,
+        details: `تعديل بيانات المسؤول (${officialToSave.fullName}) - باجة (${officialToSave.badgeNumber})`,
+        performedBy: 'مسؤول النظام',
+      });
+      addToast('success', 'تم تعديل بيانات المسؤول بنجاح', officialToSave.fullName);
     } else {
       updated = [officialToSave, ...officials];
+      addAuditLog({
+        action: 'add',
+        officialId: officialToSave.id,
+        officialName: officialToSave.fullName,
+        details: `إضافة مسؤول جديد (${officialToSave.fullName}) - باجة (${officialToSave.badgeNumber})`,
+        performedBy: 'مسؤول النظام',
+      });
+      addToast('success', 'تمت إضافة المسؤول بنجاح', officialToSave.fullName);
     }
     setOfficials(updated);
     saveOfficials(updated);
   };
 
-  const handleDeleteOfficial = (id: string) => {
-    const updated = officials.filter((o) => o.id !== id);
-    setOfficials(updated);
-    saveOfficials(updated);
+  const handleDeletePrompt = (official: Official) => {
+    if (!isAdmin) {
+      setIsLoginModalOpen(true);
+      return;
+    }
+
+    setConfirmDialog({
+      isOpen: true,
+      title: 'تأكيد حذف المسؤول',
+      message: `هل أنت متأكد من حذف (${official.fullName}) ذو الباجة (${official.badgeNumber})؟ سيتم حفظ نسخة استرجاع في الأرشيف قبل الحذف.`,
+      variant: 'danger',
+      action: () => {
+        const updated = officials.filter((o) => o.id !== official.id);
+        setOfficials(updated);
+        saveOfficials(updated);
+        addAuditLog({
+          action: 'delete',
+          officialId: official.id,
+          officialName: official.fullName,
+          details: `حذف المسؤول (${official.fullName}) - باجة (${official.badgeNumber})`,
+          performedBy: 'مسؤول النظام',
+        });
+        addToast('info', 'تم حذف المسؤول من المنظومة', official.fullName);
+        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+      },
+    });
   };
 
-  const handleResetData = () => {
-    const reset = resetOfficialsToDefault();
-    setOfficials(reset);
+  const handleResetPrompt = () => {
+    if (!isAdmin) {
+      setIsLoginModalOpen(true);
+      return;
+    }
+
+    setConfirmDialog({
+      isOpen: true,
+      title: 'استعادة بيانات المجمع الأصلية المعتمدة',
+      message: 'هل تريد إعادة تعيين كافة البيانات إلى القائمة الافتراضية المعتمدة لقسم مجمع سيد الشهداء؟ سيتم أخذ نسخة احتياطية تلقائية من بياناتك الحالية قبل الاستعادة.',
+      variant: 'warning',
+      action: () => {
+        const reset = resetOfficialsToDefault();
+        setOfficials(reset);
+        addToast('success', 'تمت استعادة بيانات المجمع الأصلية بنجاح');
+        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+      },
+    });
+  };
+
+  const handleImportSuccess = (importedList: Official[], mode: 'replace' | 'merge') => {
+    let finalOfficials: Official[];
+    if (mode === 'replace') {
+      finalOfficials = importedList;
+    } else {
+      // Merge: keep existing, add or overwrite by badge/id
+      const existingMap = new Map(officials.map((o) => [o.badgeNumber.toLowerCase(), o]));
+      importedList.forEach((item) => {
+        existingMap.set(item.badgeNumber.toLowerCase(), item);
+      });
+      finalOfficials = Array.from(existingMap.values());
+    }
+
+    setOfficials(finalOfficials);
+    saveOfficials(finalOfficials);
+    addToast('success', 'تم استيراد قاعدة البيانات بنجاح', `تم تحميل (${importedList.length}) مسؤول`);
+  };
+
+  // Toggle Admin / Viewer lock
+  const handleToggleAdmin = () => {
+    if (isAdmin) {
+      clearAdminSession();
+      setIsAdmin(false);
+      addToast('info', 'تم قفل وضع الإدارة', 'المنظومة الآن في وضع المشاهدة الآمن');
+    } else {
+      setIsLoginModalOpen(true);
+    }
   };
 
   // Divisions list for filters
@@ -158,9 +325,9 @@ export default function App() {
     return Array.from(set);
   }, [officials]);
 
-  // Filtered officials list
-  const filteredOfficials = useMemo(() => {
-    return officials.filter((official) => {
+  // Filtered & Sorted officials list
+  const filteredAndSortedOfficials = useMemo(() => {
+    const filtered = officials.filter((official) => {
       const matchesDivision = selectedDivision === 'all' || official.division === selectedDivision;
       if (!matchesDivision) return false;
 
@@ -172,17 +339,46 @@ export default function App() {
       const badgeMatch = official.badgeNumber.toLowerCase().includes(q);
       const radioMatch = official.radioDevice?.toLowerCase().includes(q);
       const phoneMatch = official.mobilePhones.some((p) => p.number.includes(q) || p.label.toLowerCase().includes(q));
-      const extMatch = official.internalExtensions.some((e) => e.number.includes(q) || e.label.toLowerCase().includes(q));
+      const extMatch = official.internalExtensions?.some((e) => e.number.includes(q) || e.label.toLowerCase().includes(q));
 
       return nameMatch || titleMatch || badgeMatch || radioMatch || phoneMatch || extMatch;
     });
-  }, [officials, selectedDivision, searchQuery]);
+
+    // Multi-criteria sorting
+    return filtered.sort((a, b) => {
+      switch (sortOption) {
+        case 'name_asc':
+          return a.fullName.localeCompare(b.fullName, 'ar');
+        case 'name_desc':
+          return b.fullName.localeCompare(a.fullName, 'ar');
+        case 'badge_asc':
+          return a.badgeNumber.localeCompare(b.badgeNumber, undefined, { numeric: true });
+        case 'badge_desc':
+          return b.badgeNumber.localeCompare(a.badgeNumber, undefined, { numeric: true });
+        case 'division':
+          return a.division.localeCompare(b.division, 'ar');
+        case 'date_desc':
+          return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+        default:
+          return 0;
+      }
+    });
+  }, [officials, selectedDivision, searchQuery, sortOption]);
+
+  // Paginated chunk
+  const paginatedOfficials = useMemo(() => {
+    if (pageSize === -1) return filteredAndSortedOfficials;
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredAndSortedOfficials.slice(startIndex, startIndex + pageSize);
+  }, [filteredAndSortedOfficials, currentPage, pageSize]);
+
+  const totalPages = pageSize === -1 ? 1 : Math.ceil(filteredAndSortedOfficials.length / pageSize);
 
   // Overall Statistics
   const stats = useMemo(() => {
     const totalOfficials = officials.length;
     const totalMobiles = officials.reduce((acc, curr) => acc + curr.mobilePhones.length, 0);
-    const totalInternal = officials.reduce((acc, curr) => acc + curr.internalExtensions.length, 0);
+    const totalInternal = officials.reduce((acc, curr) => acc + (curr.internalExtensions?.length || 0), 0);
     const totalRadios = officials.filter((o) => Boolean(o.radioDevice)).length;
     return { totalOfficials, totalMobiles, totalInternal, totalRadios };
   }, [officials]);
@@ -199,9 +395,18 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-cairo selection:bg-amber-500 selection:text-slate-950">
+      {/* Toast Notification Container */}
+      <ToastContainer toasts={toasts} onDismiss={removeToast} />
+
       {/* Top Navbar */}
       <Navbar
+        isAdmin={isAdmin}
+        onToggleAdminLogin={handleToggleAdmin}
         onAddNew={() => {
+          if (!isAdmin) {
+            setIsLoginModalOpen(true);
+            return;
+          }
           setEditingOfficial(null);
           setIsFormModalOpen(true);
         }}
@@ -214,8 +419,24 @@ export default function App() {
           setIsPrintStudioOpen(true);
         }}
         onOpenScanner={() => setIsScannerOpen(true)}
-        onExportBackup={() => exportOfficialsJson(officials)}
-        onResetData={handleResetData}
+        onOpenReport={() => setIsReportModalOpen(true)}
+        onOpenImport={() => {
+          if (!isAdmin) {
+            setIsLoginModalOpen(true);
+            return;
+          }
+          setIsImportModalOpen(true);
+        }}
+        onExportBackup={() => {
+          exportOfficialsJson(officials);
+          addToast('success', 'تم تصدير النسخة الاحتياطية بنجاح (JSON)');
+        }}
+        onExportCsv={() => {
+          exportOfficialsCsv(officials);
+          addToast('success', 'تم تصدير كشف إكسل بنجاح (CSV)');
+        }}
+        onOpenAuditLogs={() => setIsAuditModalOpen(true)}
+        onResetData={handleResetPrompt}
       />
 
       {/* Hero / Department Banner */}
@@ -236,7 +457,7 @@ export default function App() {
                 بطاقات ذكية مزودة بباركود استعراض فوري مربع (QR Code)، تتيح للزائرين والوفود والجهات الإدارية الوصول المباشر لكافة أرقام الهواتف المحمولة والبدالة الداخلية وجهاز النداء بمجرد مسح الكود بكاميرا الموبايل.
               </p>
 
-              {/* Prominent Quick Actions: Print Studio & Modern Barcode */}
+              {/* Prominent Quick Actions */}
               <div className="flex flex-wrap items-center gap-3 pt-2">
                 <button
                   onClick={() => {
@@ -260,8 +481,16 @@ export default function App() {
                   <span>استوديو طباعة الباجات وبطاقات الهوية</span>
                 </button>
 
+                <button
+                  onClick={() => setIsReportModalOpen(true)}
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 text-xs sm:text-sm font-semibold transition"
+                >
+                  <FileText className="w-4 h-4 text-amber-400" />
+                  <span>التقرير الإداري الرسمي (A4)</span>
+                </button>
+
                 <div className="flex items-center gap-2 bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-700/80 text-xs">
-                  <span className="text-slate-400 font-semibold">نوع الباركود:</span>
+                  <span className="text-slate-400 font-semibold">تشفير الباركود:</span>
                   <select
                     value={systemQrMode}
                     onChange={(e) => setSystemQrMode(e.target.value as QrTargetMode)}
@@ -309,7 +538,7 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {/* Search & Division Filter Controls */}
+        {/* Search, Sorting, Division Filter & View Toggle */}
         <div className="bg-slate-900/80 rounded-2xl border border-slate-800 p-4 space-y-3 no-print">
           <div className="flex flex-col md:flex-row items-center gap-3">
             {/* Search Input */}
@@ -330,6 +559,24 @@ export default function App() {
                   مسح
                 </button>
               )}
+            </div>
+
+            {/* Sorting Dropdown */}
+            <div className="flex items-center gap-1.5 bg-slate-950 px-3 py-2 rounded-xl border border-slate-800 text-xs shrink-0 w-full md:w-auto">
+              <ArrowUpDown className="w-3.5 h-3.5 text-amber-400" />
+              <span className="text-slate-400 font-medium">الترتيب:</span>
+              <select
+                value={sortOption}
+                onChange={(e) => setSortOption(e.target.value as SortOption)}
+                className="bg-transparent text-amber-300 font-bold focus:outline-none text-xs"
+              >
+                <option value="badge_asc">رقم الباجة (تصاعدي)</option>
+                <option value="badge_desc">رقم الباجة (تنازلي)</option>
+                <option value="name_asc">الاسم (أ - ي)</option>
+                <option value="name_desc">الاسم (ي - أ)</option>
+                <option value="division">الشعبة</option>
+                <option value="date_desc">أحدث إضافة</option>
+              </select>
             </div>
 
             {/* View Layout Toggle */}
@@ -356,7 +603,7 @@ export default function App() {
               </div>
 
               <span className="text-xs text-slate-400 font-medium">
-                النتائج: <strong className="text-amber-400 font-mono">{filteredOfficials.length}</strong> مسؤول
+                النتائج: <strong className="text-amber-400 font-mono">{filteredAndSortedOfficials.length}</strong> مسؤول
               </span>
             </div>
           </div>
@@ -399,7 +646,7 @@ export default function App() {
         </div>
 
         {/* Directory Output */}
-        {filteredOfficials.length === 0 ? (
+        {filteredAndSortedOfficials.length === 0 ? (
           <div className="py-16 text-center bg-slate-900/40 rounded-3xl border border-slate-800 space-y-3">
             <Users className="w-12 h-12 text-slate-600 mx-auto" />
             <h3 className="text-base font-bold text-slate-300">لم يتم العثور على أي مسؤول</h3>
@@ -418,20 +665,24 @@ export default function App() {
           </div>
         ) : layoutMode === 'grid' ? (
           /* Grid View of Officials */
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filteredOfficials.map((official) => (
-              <OfficialCard
-                key={`${official.id}_${systemQrMode}_${urlConfigVersion}`}
-                official={official}
-                onOpenMobileView={handleOpenMobilePreview}
-                onOpenPrintModal={(o) => setPrintingOfficial(o)}
-                onEdit={(o) => {
-                  setEditingOfficial(o);
-                  setIsFormModalOpen(true);
-                }}
-                onDelete={handleDeleteOfficial}
-              />
-            ))}
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {paginatedOfficials.map((official) => (
+                <OfficialCard
+                  key={`${official.id}_${systemQrMode}_${urlConfigVersion}`}
+                  official={official}
+                  isAdmin={isAdmin}
+                  onOpenMobileView={handleOpenMobilePreview}
+                  onOpenPrintModal={(o) => setPrintingOfficial(o)}
+                  onEdit={(o) => {
+                    setEditingOfficial(o);
+                    setIsFormModalOpen(true);
+                  }}
+                  onDelete={handleDeletePrompt}
+                  onRequireAdmin={() => setIsLoginModalOpen(true)}
+                />
+              ))}
+            </div>
           </div>
         ) : (
           /* Table View of Officials */
@@ -449,7 +700,7 @@ export default function App() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/80">
-                  {filteredOfficials.map((official) => (
+                  {paginatedOfficials.map((official) => (
                     <tr key={official.id} className="hover:bg-slate-800/40 transition">
                       {/* Name & Photo */}
                       <td className="py-3 px-4">
@@ -513,12 +764,80 @@ export default function App() {
                           >
                             <Printer className="w-4 h-4" />
                           </button>
+                          <button
+                            onClick={() => {
+                              if (!isAdmin) {
+                                setIsLoginModalOpen(true);
+                              } else {
+                                setEditingOfficial(official);
+                                setIsFormModalOpen(true);
+                              }
+                            }}
+                            className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-amber-300 transition"
+                            title="تعديل بيانات المسؤول"
+                          >
+                            تعديل
+                          </button>
                         </div>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* Pagination Bar */}
+        {filteredAndSortedOfficials.length > 0 && (
+          <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs no-print">
+            {/* Page size selector */}
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400">عدد المسؤولين في الصفحة:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+                className="bg-slate-950 text-amber-300 font-bold px-2.5 py-1 rounded-lg border border-slate-700 focus:outline-none"
+              >
+                <option value={6}>6 مسؤولين</option>
+                <option value={12}>12 مسؤول</option>
+                <option value={24}>24 مسؤول</option>
+                <option value={-1}>عرض الكل ({filteredAndSortedOfficials.length})</option>
+              </select>
+            </div>
+
+            {/* Page numbers navigation */}
+            {totalPages > 1 && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  disabled={currentPage <= 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 flex items-center gap-1 transition"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                  <span>السابق</span>
+                </button>
+
+                <div className="flex items-center gap-1 px-2 font-mono font-bold text-amber-400">
+                  <span>{currentPage}</span>
+                  <span className="text-slate-500">/</span>
+                  <span className="text-slate-400">{totalPages}</span>
+                </div>
+
+                <button
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 flex items-center gap-1 transition"
+                >
+                  <span>التالي</span>
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {/* Summary count */}
+            <div className="text-slate-400">
+              عرض {pageSize === -1 ? filteredAndSortedOfficials.length : Math.min(filteredAndSortedOfficials.length, (currentPage - 1) * pageSize + 1)} إلى {pageSize === -1 ? filteredAndSortedOfficials.length : Math.min(filteredAndSortedOfficials.length, currentPage * pageSize)} من أصل {filteredAndSortedOfficials.length} مسؤول
             </div>
           </div>
         )}
@@ -545,6 +864,7 @@ export default function App() {
       <OfficialFormModal
         isOpen={isFormModalOpen}
         initialOfficial={editingOfficial}
+        existingOfficials={officials}
         onClose={() => {
           setIsFormModalOpen(false);
           setEditingOfficial(null);
@@ -599,6 +919,46 @@ export default function App() {
         defaultQrMode={systemQrMode}
         initialTemplate={printStudioTemplate}
         onClose={() => setIsPrintStudioOpen(false)}
+      />
+
+      {/* 7. Official Printable Administrative Report Modal */}
+      <OfficialReportModal
+        isOpen={isReportModalOpen}
+        officials={officials}
+        onClose={() => setIsReportModalOpen(false)}
+      />
+
+      {/* 8. Import JSON Backup Modal */}
+      <ImportBackupModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onImportSuccess={handleImportSuccess}
+      />
+
+      {/* 9. Audit Activity Log Modal */}
+      <AuditLogModal
+        isOpen={isAuditModalOpen}
+        onClose={() => setIsAuditModalOpen(false)}
+      />
+
+      {/* 10. Admin PIN Login & Change Modal */}
+      <AdminLoginModal
+        isOpen={isLoginModalOpen}
+        onClose={() => setIsLoginModalOpen(false)}
+        onSuccess={() => {
+          setIsAdmin(true);
+          addToast('success', 'تم تفعيل وضع الإدارة', 'صلاحيات الإضافة والتعديل والحذف متاحة الآن');
+        }}
+      />
+
+      {/* 11. Interactive Confirmation Modal */}
+      <ConfirmModal
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        variant={confirmDialog.variant}
+        onConfirm={confirmDialog.action}
+        onCancel={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
       />
     </div>
   );
